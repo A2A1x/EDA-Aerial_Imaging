@@ -1,3 +1,52 @@
+/*
+  README payload summary (embedded)
+
+  Purpose:
+  - Monitor payload altitude and proximity for an aerial imaging system.
+  - Smooth altitude readings with a simple Kalman-style filter, estimate vertical speed,
+    and trigger a servo-controlled camera shutter under configurable conditions.
+  - Provide audio (piezo) and visual (LED) feedback and Serial telemetry.
+
+  Required hardware & libraries:
+  - Arduino-compatible board
+  - Servo connected to PIN_SERVO (pin 3)
+  - Altimeter using the EYW_alt library (object: altitude)
+  - Ultrasonic distance sensor HCSR04 (trig: PIN_TRIG=6, echo: PIN_ECHO=7)
+  - Piezo speaker on PIN_SPEAKER (pin 5)
+  - Arm/disarm button on PIN_BUTTON (pin 2)
+  - Status LED on PIN_LED (pin 4) and onboard LED on pin 13
+  - Libraries: Servo, HCSR04, EYW_alt
+
+  High-level behavior:
+  1) setup(): initialize Serial, pins, attach servo, calibrate altimeter, play startup tone.
+  2) loop(): handle button press (arming), read sensors, smooth height (Kalman),
+     calculate falling speed, check ground impact, log telemetry.
+  3) Triggers:
+     - Initial trigger: when armed and kalmanHeight > HEIGHT_THRESHOLD (default 3.0 m),
+       actuate servo to mimic camera shutter and play a trigger tone (one-time per arm).
+     - Periodic trigger: while armed and airborne, actuate servo every
+       PERIODIC_TRIGGER_INTERVAL (default 30 seconds) and play a periodic tone.
+  4) Ground impact: if kalmanHeight <= GROUND_IMPACT_HEIGHT (0.1 m) while armed,
+     flag ground impact, auto-disarm, turn off LED and play landing tone.
+
+  Key configuration defaults (see constants in the sketch):
+  - HEIGHT_THRESHOLD = 3.0 m
+  - PERIODIC_TRIGGER_INTERVAL = 30000 ms (30 s)
+  - GROUND_IMPACT_HEIGHT = 0.1 m
+  - SPEED_CALC_INTERVAL = 50 ms
+  - DEBOUNCE_DELAY = 200 ms
+
+  Notes / suggestions:
+  - The Kalman-like filter here is simple; tune kalmanEstimateError and
+    kalmanMeasurementError for your altimeter noise characteristics.
+  - The sketch uses blocking delay() calls for servo timing and tones; for
+    improved responsiveness convert those to millis()-based non-blocking timers.
+  - MAX_FALLING_SPEED is defined but unused; consider checking it before
+    actuating the servo to avoid triggering during fast descent.
+  - To test on bench: simulate arming and mock or manually vary altitude readings
+    while observing Serial output.
+*/
+
 #include <Servo.h>
 #include <HCSR04.h>
 #include <EYW_alt.h>
