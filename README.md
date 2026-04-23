@@ -1,59 +1,5 @@
 # EDA-Aerial_Imaging
 
-A small exploratory data analysis (EDA) repository for aerial and satellite imagery. This repo collects analyses, visualizations, and notebooks intended to help understand image datasets, label distribution, and common preprocessing steps used in remote sensing workflows.
-
-## What you'll find here
-
-- Notebooks with EDA and visualization code (Jupyter notebooks)
-- Helper scripts for loading and pre-processing imagery
-- Example plots and summaries describing dataset composition
-
-## Repository structure
-
-- data/
-  - (not included) place dataset files here or add a README in the data folder describing download steps
-- notebooks/
-  - EDA_notebook.ipynb — main exploratory analysis and visualizations
-- src/
-  - data_utils.py — dataset loaders and preprocessing helpers
-  - viz_utils.py — plotting helpers used by notebooks
-- results/
-  - figures/ — generated plots
-
-## Getting started
-
-1. Clone the repository:
-
-   git clone https://github.com/A2A1x/EDA-Aerial_Imaging.git
-
-2. Install dependencies (recommended: use a virtual environment):
-
-   python -m venv .venv
-   source .venv/bin/activate   # on Windows use `.venv\Scripts\activate`
-   pip install -r requirements.txt
-
-If there's no requirements.txt, typical packages used by the notebooks are:
-
-- numpy
-- pandas
-- matplotlib
-- seaborn
-- scikit-image
-- rasterio (if working with geospatial rasters)
-- jupyterlab or notebook
-
-## Running the notebooks
-
-- Start Jupyter Lab / Notebook:
-
-  jupyter lab
-
-- Open notebooks/EDA_notebook.ipynb and run the cells. Update the data path in the notebook to point to your local dataset (see data/ README or the top of the notebook).
-
-## Data
-
-This repository does not include large imagery datasets. Place your local copy of the dataset under the `data/` directory or update paths in `notebooks/` and `src/` to point to your dataset locations.
-
 ## payload_code.ino — Aerial payload firmware (overview)
 
 This repository includes `payload_code.ino`, an Arduino/embedded firmware sketch intended for an aerial imaging payload. The file implements altitude monitoring, a simple Kalman filter for smoothing height measurements, fall-speed estimation, and servo-based camera triggering with audio/LED cues. Below is a concise explanation of what the sketch does and how it works.
@@ -136,20 +82,6 @@ Make sure these libraries are installed in your Arduino environment before compi
 - `MAX_FALLING_SPEED` is present but unused: you can add a check in the trigger and periodic logic to avoid actuating when falling too quickly.
 - To test without flight, attach the hardware on a bench and simulate arming + changing the altitude input (or mock the altitude readings) while observing Serial output.
 
-## Contributing
-
-Contributions are welcome. Please:
-
-- Open an issue to discuss larger changes
-- Create small, focused pull requests
-- Add unit tests for new helper functions when possible
-
 ## License
 
 This repository is provided under the MIT License. See LICENSE for details (or add one if missing).
-
-## Contact
-
-Author: A2A1x
-
-If you want specific changes to this README (more details about the dataset, sample images, or a quick-start example), tell me what to include and I will update it.
