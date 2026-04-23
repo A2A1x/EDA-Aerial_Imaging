@@ -23,6 +23,8 @@ int currentDistance = 0;
 bool systemArmed = false;
 bool triggerExecuted = false;
 
+double heightTresshold = 3;
+
 // Button debounce
 unsigned long lastButtonPress = 0;
 const int debounceDelay = 200;
@@ -57,7 +59,7 @@ void loop() {
 
   logData();
 
-  if (systemArmed && currentHeight > 0.1) {
+  if (systemArmed && currentHeight > heightTresshold) {
     executeTrigger();
   }
 
