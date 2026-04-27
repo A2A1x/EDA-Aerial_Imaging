@@ -85,7 +85,7 @@ bool groundImpactDetected = false;
 const double HEIGHT_THRESHOLD = 3.0;      // meters
 const float MAX_FALLING_SPEED = 5.0;      // m/s safety threshold
 const double GROUND_IMPACT_HEIGHT = 0.1;  // meters - consider landed if below this
-const unsigned long PERIODIC_TRIGGER_INTERVAL = 30000;  // 30 seconds in milliseconds
+const unsigned long PERIODIC_TRIGGER_INTERVAL = 10000;  // 10 seconds in milliseconds
 
 // --- Button Debounce ---
 unsigned long lastButtonPress = 0;
