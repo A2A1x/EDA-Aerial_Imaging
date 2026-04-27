@@ -20,14 +20,17 @@
   High-level behavior:
   1) setup(): initialize Serial, pins, attach servo, calibrate altimeter, play startup tone.
   2) loop(): handle button press (arming), read sensors, smooth height (Kalman),
-     calculate falling speed, check ground impact, log telemetry.
+     calculate falling speed, check ground impact.
   3) Triggers:
      - Initial trigger: when armed and kalmanHeight > HEIGHT_THRESHOLD (default 3.0 m),
        actuate servo to mimic camera shutter and play a trigger tone (one-time per arm).
      - Periodic trigger: while armed and airborne, actuate servo every
        PERIODIC_TRIGGER_INTERVAL (default 30 seconds) and play a periodic tone.
-  4) Ground impact: if kalmanHeight <= GROUND_IMPACT_HEIGHT (0.1 m) while armed,
-     flag ground impact, auto-disarm, turn off LED and play landing tone.
+  4) Ground impact: uses the ultrasonic proximity sensor (HCSR04). If the measured
+     distance to the ground (converted to meters) is <= GROUND_IMPACT_HEIGHT (0.1 m)
+     while armed, flag ground impact, auto-disarm, turn off LED and play landing tone.
+     If the ultrasonic sensor returns an invalid reading (0), the code falls back to
+     the altimeter kalmanHeight check.
 
   Key configuration defaults (see constants in the sketch):
   - HEIGHT_THRESHOLD = 3.0 m
@@ -43,8 +46,8 @@
     improved responsiveness convert those to millis()-based non-blocking timers.
   - MAX_FALLING_SPEED is defined but unused; consider checking it before
     actuating the servo to avoid triggering during fast descent.
-  - To test on bench: simulate arming and mock or manually vary altitude readings
-    while observing Serial output.
+  - To test on bench: simulate arming and mock or manually vary altitude and
+    proximity readings while observing Serial output.
 */
 
 #include <Servo.h>
@@ -234,8 +237,19 @@ void calculateFallingSpeed() {
 }
 
 void checkGroundImpact() {
-  if (kalmanHeight <= GROUND_IMPACT_HEIGHT && systemArmed) {
-    groundImpactDetected = true;
+  // Use ultrasonic proximity sensor to detect ground impact.
+  // currentDistance is in cm; convert to meters.
+  // Many HCSR04 libraries return 0 when out-of-range / invalid, so treat 0 as invalid.
+  if (currentDistance > 0) {
+    float distanceMeters = currentDistance / 100.0;
+    if (distanceMeters <= GROUND_IMPACT_HEIGHT && systemArmed) {
+      groundImpactDetected = true;
+    }
+  } else {
+    // Fallback to altimeter-based detection if ultrasonic reading is invalid
+    if (kalmanHeight <= GROUND_IMPACT_HEIGHT && systemArmed) {
+      groundImpactDetected = true;
+    }
   }
 }
 
