@@ -9,7 +9,7 @@ This repository includes `payload_code.ino`, an Arduino/embedded firmware sketch
 - Monitor payload altitude and proximity while airborne.
 - Automatically trigger a camera shutter (via a servo) under two conditions:
   - An initial trigger when the system is armed and a configurable height threshold is exceeded (manual/mission start).
-  - Periodic servo actuations (every 30 seconds) while the system remains armed and airborne.
+  - Periodic servo actuations (every 3 seconds) while the system remains armed and airborne.
 - Detect ground impact and automatically disarm the system.
 - Provide auditory (speaker tones) and visual (LED) feedback for state changes.
 - Print runtime telemetry to the Serial console for logging and debugging.
@@ -40,7 +40,7 @@ Make sure these libraries are installed in your Arduino environment before compi
    - A startup tone and LED blink indicate readiness.
 
 2. Arming (handleButton):
-   - Pressing the configured button (debounced) arms the system.
+   - Each press of the button (debounced, edge-triggered) toggles armed/disarmed.
    - When armed: LED turns on, arming tone plays, `systemArmed` is set true, and periodic timers reset.
 
 3. Sensor reading (readSensors):
@@ -56,10 +56,11 @@ Make sure these libraries are installed in your Arduino environment before compi
 
 6. Trigger logic
    - Initial trigger (executeTrigger): When the system is armed and `kalmanHeight` exceeds `HEIGHT_THRESHOLD` (default 3.0 m) and the initial trigger hasn't run yet, the code activates the servo to mimic a camera shutter (moves to 70°, waits 300 ms, returns to 90°), plays a trigger tone, and sets `triggerExecuted`.
-   - Periodic trigger (executePeriodicTrigger): While still armed and above the ground impact threshold, the code will actuate the servo every `PERIODIC_TRIGGER_INTERVAL` (default 30 seconds). Each actuation increments `shotCount` and plays a periodic tone.
+   - Periodic trigger (executePeriodicTrigger): While still armed and above the ground impact threshold, the code will actuate the servo every `PERIODIC_TRIGGER_INTERVAL` (default 3 seconds). Each actuation increments `shotCount` and plays a periodic tone.
 
 7. Ground impact & safety
-   - If `kalmanHeight` falls below or equal to `GROUND_IMPACT_HEIGHT` (0.1 m) while the system is armed, the sketch flags a ground impact (`groundImpactDetected`) and automatically disarms the system (LED off, landing tone, and a Serial message).
+   - Checked only after the initial trigger has fired, so arming on the ground doesn't immediately disarm.
+   - If the ultrasonic distance (or, when that reading is invalid, `kalmanHeight`) is at or below `GROUND_IMPACT_HEIGHT` (0.1 m) while armed, the sketch flags a ground impact (`groundImpactDetected`) and automatically disarms the system (LED off, landing tone, and a Serial message).
    - Note: `MAX_FALLING_SPEED` is defined (5.0 m/s) as a safety threshold but is not used in the current logic; you may extend the sketch to check `fallingSpeed` against this value for additional safety behavior.
 
 8. Telemetry & feedback
@@ -70,14 +71,14 @@ Make sure these libraries are installed in your Arduino environment before compi
 ### Key configuration values (defaults in the sketch)
 
 - HEIGHT_THRESHOLD = 3.0 m — initial trigger height
-- PERIODIC_TRIGGER_INTERVAL = 30000 ms — 30s between periodic actuations
+- PERIODIC_TRIGGER_INTERVAL = 3000 ms — 3 s between periodic actuations
 - GROUND_IMPACT_HEIGHT = 0.1 m — threshold to consider payload landed
 - SPEED_CALC_INTERVAL = 50 ms — how often falling speed is recalculated
 - DEBOUNCE_DELAY = 200 ms — button debounce window
 
 ### Notes & suggestions
 
-- The Kalman filter implementation here is a simple form and may need tuning for your specific altimeter sensor noise characteristics (adjust `kalmanEstimateError` and `kalmanMeasurementError`).
+- The Kalman filter implementation here is a simple form and may need tuning for your specific altimeter sensor noise characteristics (adjust `kalmanProcessNoise` and `kalmanMeasurementError`).
 - Delays (`delay()`) are used for servo timing and tones; these block the main loop and may affect responsiveness. If you need non-blocking behavior, consider refactoring to use millis()-based timers instead of `delay()`.
 - `MAX_FALLING_SPEED` is present but unused: you can add a check in the trigger and periodic logic to avoid actuating when falling too quickly.
 - To test without flight, attach the hardware on a bench and simulate arming + changing the altitude input (or mock the altitude readings) while observing Serial output.

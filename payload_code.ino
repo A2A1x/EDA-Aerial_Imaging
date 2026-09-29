@@ -13,7 +13,7 @@
   - Altimeter using the EYW_alt library (object: altitude)
   - Ultrasonic distance sensor HCSR04 (trig: PIN_TRIG=6, echo: PIN_ECHO=7)
   - Piezo speaker on PIN_SPEAKER (pin 5)
-  - Arm/disarm button on PIN_BUTTON (pin 2)
+  - Arm/disarm button on PIN_BUTTON (pin 2) - each press toggles
   - Status LED on PIN_LED (pin 4) and onboard LED on pin 13
   - Libraries: Servo, HCSR04, EYW_alt
 
@@ -25,8 +25,9 @@
      - Initial trigger: when armed and kalmanHeight > HEIGHT_THRESHOLD (default 3.0 m),
        actuate servo to mimic camera shutter and play a trigger tone (one-time per arm).
      - Periodic trigger: while armed and airborne, actuate servo every
-       PERIODIC_TRIGGER_INTERVAL (default 30 seconds) and play a periodic tone.
-  4) Ground impact: uses the ultrasonic proximity sensor (HCSR04). If the measured
+       PERIODIC_TRIGGER_INTERVAL (default 3 seconds) and play a periodic tone.
+  4) Ground impact (only checked after the initial trigger, so arming on the ground
+     doesn't instantly disarm): uses the ultrasonic proximity sensor (HCSR04). If the measured
      distance to the ground (converted to meters) is <= GROUND_IMPACT_HEIGHT (0.1 m)
      while armed, flag ground impact, auto-disarm, turn off LED and play landing tone.
      If the ultrasonic sensor returns an invalid reading (0), the code falls back to
@@ -34,7 +35,7 @@
 
   Key configuration defaults (see constants in the sketch):
   - HEIGHT_THRESHOLD = 3.0 m
-  - PERIODIC_TRIGGER_INTERVAL = 30000 ms (30 s)
+  - PERIODIC_TRIGGER_INTERVAL = 3000 ms (3 s)
   - GROUND_IMPACT_HEIGHT = 0.1 m
   - SPEED_CALC_INTERVAL = 50 ms
   - DEBOUNCE_DELAY = 200 ms
@@ -74,7 +75,6 @@ Servo cameraShutter;
 
 // --- State Variables ---
 float currentHeight = 0;
-float previousHeight = 0;
 float fallingSpeed = 0;  // meters per second
 int currentDistance = 0;
 
@@ -89,11 +89,13 @@ const unsigned long PERIODIC_TRIGGER_INTERVAL = 3000;  // 3 seconds in milliseco
 
 // --- Button Debounce ---
 unsigned long lastButtonPress = 0;
+int lastButtonState = LOW;
 const unsigned long DEBOUNCE_DELAY = 200;
 const unsigned long LOOP_DELAY = 50;  // milliseconds
 
 // --- Timing for Speed Calculation ---
 unsigned long lastSensorReadTime = 0;
+float lastSpeedHeight = 0;  // kalmanHeight at last speed calculation
 const unsigned long SPEED_CALC_INTERVAL = 50;  // Calculate speed every 50ms
 
 // --- Timing for Periodic Servo Actuation ---
@@ -105,6 +107,7 @@ float kalmanHeight = 0;
 float kalmanEstimate = 0;
 float kalmanEstimateError = 0.1;
 float kalmanMeasurementError = 0.2;
+float kalmanProcessNoise = 0.1;  // higher = trusts new readings more (0.1 -> steady gain 0.5)
 float kalmanGain = 0;
 
 void setup() {
@@ -156,7 +159,7 @@ void loop() {
     shotCount = 0;
   }
 
-  // Periodic servo actuation every 30 seconds while armed and airborne
+  // Periodic servo actuation while armed and airborne
   if (systemArmed && kalmanHeight > GROUND_IMPACT_HEIGHT && !groundImpactDetected) {
     unsigned long currentTime = millis();
     if (currentTime - lastPeriodicTriggerTime >= PERIODIC_TRIGGER_INTERVAL) {
@@ -181,36 +184,38 @@ void loop() {
 // ============================================================================
 
 void handleButton() {
-  if (digitalRead(PIN_BUTTON) == HIGH) {
-    unsigned long currentTime = millis();
-    
-    if (currentTime - lastButtonPress > DEBOUNCE_DELAY) {
-      digitalWrite(PIN_LED, HIGH);
-      systemArmed = true;
+  int state = digitalRead(PIN_BUTTON);
+  unsigned long currentTime = millis();
+
+  // Act on the press edge only, so holding the button doesn't re-arm repeatedly
+  if (state == HIGH && lastButtonState == LOW && currentTime - lastButtonPress > DEBOUNCE_DELAY) {
+    lastButtonPress = currentTime;
+    systemArmed = !systemArmed;
+    digitalWrite(PIN_LED, systemArmed ? HIGH : LOW);
+
+    if (systemArmed) {
       triggerExecuted = false;
       groundImpactDetected = false;
       shotCount = 0;
-      
+      lastPeriodicTriggerTime = currentTime;
       Serial.println("\n*** SYSTEM ARMED ***");
       playArmingTone();
-      
-      lastButtonPress = currentTime;
-      lastPeriodicTriggerTime = currentTime;
+    } else {
+      Serial.println("\n*** SYSTEM DISARMED ***");
+      playLandingTone();
     }
-  } else {
-    digitalWrite(PIN_LED, LOW);
   }
+  lastButtonState = state;
 }
 
 void readSensors() {
-  previousHeight = currentHeight;
   currentHeight = altitude.getHeightAvg(20);  // 20-sample average
   currentDistance = proximity.measureDistanceCm();
 }
 
 void applyKalmanFilter() {
-  // Kalman gain calculation
-  kalmanEstimateError += kalmanEstimateError;
+  // Predict: uncertainty grows by process noise
+  kalmanEstimateError += kalmanProcessNoise;
   kalmanGain = kalmanEstimateError / (kalmanEstimateError + kalmanMeasurementError);
   
   // Update estimate
@@ -227,16 +232,21 @@ void calculateFallingSpeed() {
   unsigned long timeDelta = currentTime - lastSensorReadTime;
   
   if (timeDelta >= SPEED_CALC_INTERVAL) {
-    float heightDelta = kalmanHeight - previousHeight;  // Negative when falling
+    float heightDelta = kalmanHeight - lastSpeedHeight;  // Negative when falling
     float timeDeltaSeconds = timeDelta / 1000.0;
     
     fallingSpeed = (heightDelta / timeDeltaSeconds);  // m/s (negative = falling)
     
     lastSensorReadTime = currentTime;
+    lastSpeedHeight = kalmanHeight;
   }
 }
 
 void checkGroundImpact() {
+  // Only after the initial trigger (i.e. we've been above HEIGHT_THRESHOLD);
+  // otherwise arming while sitting on the ground disarms on the next loop.
+  if (!triggerExecuted) return;
+
   // Use ultrasonic proximity sensor to detect ground impact.
   // currentDistance is in cm; convert to meters.
   // Many HCSR04 libraries return 0 when out-of-range / invalid, so treat 0 as invalid.
